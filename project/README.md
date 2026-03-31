@@ -3,17 +3,12 @@
 Predicts the probability of loan default on the Lending Club dataset (2007-2018). 
 
 
-
 ## Results
 
 | Model | ROC-AUC | Recall | Avg Precision |
 |-------|---------|--------|---------------|
 | XGBoost + TF-IDF | 0.713 | 0.854 | 0.383 |
 | XGBoost + BERT | 0.717 | 0.846 | 0.387 |
-
-BERT gains 0.4% AUC but loses 0.8% recall with significantly higher compute cost. For short formulaic financial text, TF-IDF is sufficient.
-
-Evaluated on a temporal split (train: 2007-2016, test: 2017+) rather than random split to simulate real production conditions.
 
 ## Experiment Tracking
 https://dagshub.com/seif-gaaloul123/credit-default-prediction/experiments
