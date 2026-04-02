@@ -1,36 +1,84 @@
-import streamlit as st
+import os
+import re
 import joblib
 import numpy as np
-import re
+import streamlit as st
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
 st.set_page_config(
     page_title="Credit Default Prediction",
     layout="wide"
 )
 
-# ============================================================
-# LOAD MODELS
-# ============================================================
 @st.cache_resource
 def load_models():
-    try :
-        model = joblib.load("artifacts/xgb_model_tfidf.pkl")
-        scaler = joblib.load("artifacts/scaler.pkl")
-    tfidf = joblib.load("artifacts/tfidf.pkl")
-    numerical_cols = joblib.load("artifacts/numerical_cols.pkl")
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model = joblib.load(os.path.join(base_path, "artifacts/xgb_model_tfidf.pkl"))
+    scaler = joblib.load(os.path.join(base_path, "artifacts/scaler.pkl"))
+    tfidf = joblib.load(os.path.join(base_path, "artifacts/tfidf.pkl"))
+    numerical_cols = joblib.load(os.path.join(base_path, "artifacts/numerical_cols.pkl"))
     return model, scaler, tfidf, numerical_cols
-    except Exception as e:
-        st.error(f"Error loading models: {e}")
-        st.stop()
 
 model, scaler, tfidf, numerical_cols = load_models()
 
-# ============================================================
-# TEXT CLEANING — must match training exactly
-# ============================================================
+DEFAULTS = {
+    'loan_amnt': 12000,
+    'funded_amnt': 12000,
+    'funded_amnt_inv': 12000,
+    'int_rate': 13.5,
+    'installment': 370,
+    'annual_inc': 65000,
+    'dti': 17.0,
+    'delinq_2yrs': 0,
+    'fico_range_low': 690,
+    'fico_range_high': 694,
+    'inq_last_6mths': 1,
+    'open_acc': 11,
+    'pub_rec': 0,
+    'revol_bal': 8000,
+    'revol_util': 45.0,
+    'total_acc': 22,
+    'collections_12_mths_ex_med': 0,
+    'acc_now_delinq': 0,
+    'tot_coll_amt': 0,
+    'tot_cur_bal': 50000,
+    'total_rev_hi_lim': 20000,
+    'acc_open_past_24mths': 4,
+    'avg_cur_bal': 5000,
+    'bc_open_to_buy': 5000,
+    'bc_util': 55.0,
+    'chargeoff_within_12_mths': 0,
+    'delinq_amnt': 0,
+    'mo_sin_old_il_acct': 100,
+    'mo_sin_old_rev_tl_op': 120,
+    'mo_sin_rcnt_rev_tl_op': 6,
+    'mo_sin_rcnt_tl': 5,
+    'mort_acc': 1,
+    'mths_since_recent_bc': 12,
+    'mths_since_recent_inq': 6,
+    'num_accts_ever_120_pd': 0,
+    'num_actv_bc_tl': 3,
+    'num_actv_rev_tl': 5,
+    'num_bc_sats': 4,
+    'num_bc_tl': 6,
+    'num_il_tl': 8,
+    'num_op_rev_tl': 6,
+    'num_rev_accts': 12,
+    'num_rev_tl_bal_gt_0': 5,
+    'num_sats': 11,
+    'num_tl_120dpd_2m': 0,
+    'num_tl_30dpd': 0,
+    'num_tl_90g_dpd_24m': 0,
+    'num_tl_op_past_12m': 2,
+    'pct_tl_nvr_dlq': 92.0,
+    'percent_bc_gt_75': 30.0,
+    'pub_rec_bankruptcies': 0,
+    'tax_liens': 0,
+    'tot_hi_cred_lim': 60000,
+    'total_bal_ex_mort': 20000,
+    'total_bc_limit': 12000,
+    'total_il_high_credit_limit': 30000
+}
+
 def clean_text(text):
     if not text:
         return ""
@@ -40,21 +88,14 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-# ============================================================
-# UI
-# ============================================================
 st.title("Credit Default Prediction")
 st.markdown("Predict the probability of a loan defaulting using XGBoost + TF-IDF")
-
 st.markdown("---")
 
 col1, col2 = st.columns(2)
 
-# ============================================================
-# TEXT INPUTS
-# ============================================================
 with col1:
-    st.subheader("Loan Text Information")
+    st.subheader("Loan Information")
     emp_title = st.text_input("Employment Title", placeholder="e.g. Software Engineer")
     title = st.text_input("Loan Title", placeholder="e.g. Debt consolidation")
     desc = st.text_area("Loan Description", placeholder="e.g. I need this loan to pay off credit cards")
@@ -65,33 +106,22 @@ with col1:
         "renewable_energy", "educational"
     ])
 
-# ============================================================
-# NUMERICAL INPUTS
-# ============================================================
 with col2:
-    st.subheader("Loan & Borrower Details")
-    loan_amnt = st.number_input("Loan Amount ($)", min_value=500, max_value=40000, value=10000)
-    int_rate = st.slider("Interest Rate (%)", min_value=5.0, max_value=30.0, value=12.5)
-    annual_inc = st.number_input("Annual Income ($)", min_value=1000, max_value=500000, value=60000)
-    dti = st.slider("Debt-to-Income Ratio", min_value=0.0, max_value=50.0, value=15.0)
-    fico_range_low = st.slider("FICO Score (Low)", min_value=580, max_value=850, value=680)
-    revol_util = st.slider("Revolving Utilization (%)", min_value=0.0, max_value=100.0, value=30.0)
-    revol_bal = st.number_input("Revolving Balance ($)", min_value=0, max_value=500000, value=5000)
-    open_acc = st.slider("Open Accounts", min_value=0, max_value=50, value=10)
-    total_acc = st.slider("Total Accounts", min_value=0, max_value=100, value=20)
-    mort_acc = st.slider("Mortgage Accounts", min_value=0, max_value=20, value=1)
-    pub_rec = st.slider("Public Records", min_value=0, max_value=10, value=0)
-    pub_rec_bankruptcies = st.slider("Bankruptcies", min_value=0, max_value=5, value=0)
-    delinq_2yrs = st.slider("Delinquencies (2 years)", min_value=0, max_value=20, value=0)
-    inq_last_6mths = st.slider("Inquiries Last 6 Months", min_value=0, max_value=10, value=1)
+    st.subheader("Financial Details")
+    st.caption("Remaining credit bureau fields use training median values automatically")
+    loan_amnt = st.number_input("Loan Amount ($)", min_value=500, max_value=40000, value=12000)
+    int_rate = st.slider("Interest Rate (%)", min_value=5.0, max_value=30.0, value=13.5)
+    annual_inc = st.number_input("Annual Income ($)", min_value=1000, max_value=500000, value=65000)
+    dti = st.slider("Debt-to-Income Ratio (%)", min_value=0.0, max_value=50.0, value=17.0)
+    fico_range_low = st.slider("FICO Credit Score", min_value=580, max_value=850, value=690)
+    revol_util = st.slider("Credit Card Utilization (%)", min_value=0.0, max_value=100.0, value=45.0)
+    open_acc = st.slider("Number of Open Accounts", min_value=0, max_value=50, value=11)
+    pub_rec = st.slider("Public Derogatory Records", min_value=0, max_value=10, value=0)
 
 st.markdown("---")
 
-# ============================================================
-# PREDICT
-# ============================================================
-if st.button(" Default Risk", use_container_width=True):
-    # Process text
+if st.button("Predict Default Risk", use_container_width=True):
+
     combined_text = " ".join([
         clean_text(emp_title),
         clean_text(title),
@@ -101,23 +131,27 @@ if st.button(" Default Risk", use_container_width=True):
 
     text_features = tfidf.transform([combined_text])
 
-    # Numerical features — order must match numerical_cols
-    numerical_input = np.array([[
-        loan_amnt, int_rate, annual_inc, dti,
-        delinq_2yrs, fico_range_low, inq_last_6mths,
-        open_acc, pub_rec, revol_bal, revol_util,
-        total_acc, mort_acc, pub_rec_bankruptcies
-    ]])
+    feature_values = DEFAULTS.copy()
+    feature_values['loan_amnt'] = loan_amnt
+    feature_values['funded_amnt'] = loan_amnt
+    feature_values['funded_amnt_inv'] = loan_amnt
+    feature_values['int_rate'] = int_rate
+    feature_values['annual_inc'] = annual_inc
+    feature_values['dti'] = dti
+    feature_values['fico_range_low'] = fico_range_low
+    feature_values['fico_range_high'] = fico_range_low + 4
+    feature_values['revol_util'] = revol_util
+    feature_values['open_acc'] = open_acc
+    feature_values['pub_rec'] = pub_rec
 
+    numerical_input = np.array([[feature_values[col] for col in numerical_cols]])
     numerical_scaled = scaler.transform(numerical_input)
     X = np.concatenate([numerical_scaled, text_features.toarray()], axis=1)
+    X = X.astype(float)
     prob = model.predict_proba(X)[:, 1][0]
 
-    # ============================================================
-    # RESULTS
-    # ============================================================
     st.markdown("---")
-    st.subheader(" Prediction Results")
+    st.subheader("Prediction Results")
 
     col3, col4, col5 = st.columns(3)
 
@@ -126,40 +160,34 @@ if st.button(" Default Risk", use_container_width=True):
 
     with col4:
         if prob < 0.3:
-            risk = " LOW RISK"
-            color = "green"
+            risk = "LOW RISK"
         elif prob < 0.6:
-            risk = " MEDIUM RISK"
-            color = "orange"
+            risk = "MEDIUM RISK"
         else:
-            risk = " HIGH RISK"
-            color = "red"
+            risk = "HIGH RISK"
         st.metric("Risk Level", risk)
 
     with col5:
-        recommendation = "APPROVE" if prob < 0.5 else " REJECT"
+        recommendation = "APPROVE" if prob < 0.5 else "REJECT"
         st.metric("Recommendation", recommendation)
 
-    # Progress bar as gauge
     st.markdown("**Default Probability Gauge:**")
     st.progress(float(prob))
 
-    # SHAP explanationp
     st.markdown("---")
-    st.subheader(" SHAP Explanation")
+    st.subheader("SHAP Explanation")
     try:
         import shap
         import matplotlib.pyplot as plt
+        X_shap = np.array(X, dtype=np.float64)
 
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X)
-
-        all_feature_names = numerical_cols + list(tfidf.get_feature_names_out())
+        all_feature_names = list(numerical_cols) + list(tfidf.get_feature_names_out())
 
         fig, ax = plt.subplots(figsize=(10, 6))
         shap.summary_plot(
-            shap_values,
-            X,
+            shap_values, X,
             feature_names=all_feature_names,
             show=False,
             max_display=15
@@ -169,19 +197,19 @@ if st.button(" Default Risk", use_container_width=True):
     except Exception as e:
         st.warning(f"SHAP explanation unavailable: {e}")
 
-# ============================================================
-# MODEL INFO
-# ============================================================
-with st.expander(" Model Information"):
+with st.expander("Model Information"):
     st.markdown("""
     **Model:** XGBoost Classifier  
     **Text Representation:** TF-IDF (500 features)  
     **Hyperparameter Tuning:** Optuna (50 trials, 3-fold CV)  
     **Validation:** Temporal split (train: 2007-2016, test: 2017+)  
     **Explainability:** SHAP TreeExplainer  
-    
+
     **Test Set Performance:**
     - ROC-AUC: 0.75
     - Recall: 0.86
     - Average Precision: 0.39
+
+    **Note:** App uses 8 key inputs. Remaining credit bureau 
+    features use training data median values automatically.
     """)
